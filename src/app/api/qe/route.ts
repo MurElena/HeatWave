@@ -2,7 +2,9 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+const CALL_TIMEOUT_MS = 55_000;
 
 const RequestSchema = z.object({
   model: z.string().min(1),
@@ -50,7 +52,8 @@ export async function POST(req: Request) {
   try {
     const { output, usage } = await generateText({
       model,
-      maxRetries: 4,
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       system,
       prompt:
         `Score the quality of each translation below from 0 to 100 based on the ` +

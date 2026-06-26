@@ -2,7 +2,11 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+// Abort a single gateway call before it can exhaust the function budget, so the
+// client gets a clean retriable error instead of a platform 504.
+const CALL_TIMEOUT_MS = 55_000;
 
 const RequestSchema = z.object({
   model: z.string().min(1),
@@ -31,7 +35,8 @@ export async function POST(req: Request) {
   try {
     const { output, usage } = await generateText({
       model,
-      maxRetries: 4,
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       system:
         `You are a professional machine translation engine. Translate each numbered ` +
         `source segment from ${sourceLanguage} to ${targetLanguage}. Preserve meaning, ` +

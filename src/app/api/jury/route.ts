@@ -3,7 +3,9 @@ import { z } from "zod";
 import { JURY_PROMPT } from "@/lib/evaluation/metrics/llm-jury";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+const CALL_TIMEOUT_MS = 55_000;
 
 const RatingSchema = z.enum(["Good", "Neutral", "Bad"]);
 
@@ -44,53 +46,51 @@ export async function POST(req: Request) {
     .join("\n\n");
 
   try {
-    // Each model rates every segment. Run the models sequentially (rather than
-    // in parallel) to avoid bursting the free-tier rate limit.
-    const perModel: {
-      model: string;
-      ratings: ("Good" | "Neutral" | "Bad")[];
-      usage: { inputTokens: number; outputTokens: number };
-    }[] = [];
-
-    for (const model of models) {
-      let output: { ratings?: ("Good" | "Neutral" | "Bad")[] } | undefined;
-      let usage: { inputTokens?: number; outputTokens?: number } | undefined;
-      try {
-        ({ output, usage } = await generateText({
-          model,
-          maxRetries: 4,
-          system: JURY_PROMPT,
-          prompt:
-            `Rate each translation below as exactly one of Good, Neutral, or Bad, ` +
-            `following the criteria. Return one rating per segment, in order.\n\n${blocks}`,
-          output: Output.object({
-            schema: z.object({
-              ratings: z
-                .array(RatingSchema)
-                .describe("One rating (Good/Neutral/Bad) per segment, in order."),
+    // Each model rates every segment, run in parallel so the request's wall
+    // time is the slowest model rather than the sum (keeps us under the
+    // function limit). Transient rate limits are retried on the client.
+    const perModel = await Promise.all(
+      models.map(async (model) => {
+        let output: { ratings?: ("Good" | "Neutral" | "Bad")[] } | undefined;
+        let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+        try {
+          ({ output, usage } = await generateText({
+            model,
+            maxRetries: 1,
+            abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+            system: JURY_PROMPT,
+            prompt:
+              `Rate each translation below as exactly one of Good, Neutral, or Bad, ` +
+              `following the criteria. Return one rating per segment, in order.\n\n${blocks}`,
+            output: Output.object({
+              schema: z.object({
+                ratings: z
+                  .array(RatingSchema)
+                  .describe("One rating (Good/Neutral/Bad) per segment, in order."),
+              }),
             }),
-          }),
-          providerOptions: {
-            gateway: { tags: ["feature:mt-eval", "phase:jury"] },
+            providerOptions: {
+              gateway: { tags: ["feature:mt-eval", "phase:jury"] },
+            },
+          }));
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "jury model failed.";
+          throw new Error(`${model}: ${detail}`);
+        }
+        let ratings = output?.ratings ?? [];
+        if (ratings.length < items.length) {
+          ratings = [...ratings, ...Array(items.length - ratings.length).fill("Neutral")];
+        }
+        return {
+          model,
+          ratings: ratings.slice(0, items.length),
+          usage: {
+            inputTokens: usage?.inputTokens ?? 0,
+            outputTokens: usage?.outputTokens ?? 0,
           },
-        }));
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : "jury model failed.";
-        throw new Error(`${model}: ${detail}`);
-      }
-      let ratings = output?.ratings ?? [];
-      if (ratings.length < items.length) {
-        ratings = [...ratings, ...Array(items.length - ratings.length).fill("Neutral")];
-      }
-      perModel.push({
-        model,
-        ratings: ratings.slice(0, items.length),
-        usage: {
-          inputTokens: usage?.inputTokens ?? 0,
-          outputTokens: usage?.outputTokens ?? 0,
-        },
-      });
-    }
+        };
+      }),
+    );
 
     // Transpose to per-segment votes: votes[s] = [ratingModel0, ratingModel1, ...]
     const votes = items.map((_, s) => perModel.map((mv) => mv.ratings[s]));

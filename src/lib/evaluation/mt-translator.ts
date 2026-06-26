@@ -1,4 +1,9 @@
-const TRANSLATE_BATCH = 50;
+import { postJsonRetry, type UsageTotals } from "@/lib/evaluation/fetch-json";
+
+// Keep batches small enough that a single request finishes well within the
+// serverless function limit (avoids 504s), while client-side retries absorb
+// transient rate limits.
+const TRANSLATE_BATCH = 25;
 // Small pause between gateway calls to stay under free-tier rate limits.
 const THROTTLE_MS = 350;
 
@@ -6,29 +11,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let message = `Request to ${url} failed (${res.status}).`;
-    try {
-      const data = await res.json();
-      if (data?.error) message = data.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message);
-  }
-  return res.json() as Promise<T>;
-}
-
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-}
+export type { UsageTotals };
 
 export async function translateBatch(
   segments: { source: string; target: string }[],
@@ -42,7 +25,7 @@ export async function translateBatch(
   for (let i = 0; i < segments.length; i += TRANSLATE_BATCH) {
     if (i > 0) await sleep(THROTTLE_MS);
     const chunk = segments.slice(i, i + TRANSLATE_BATCH);
-    const res = await postJson<{ translations: string[]; usage?: UsageTotals }>(
+    const res = await postJsonRetry<{ translations: string[]; usage?: UsageTotals }>(
       "/api/translate",
       {
         model,
@@ -50,6 +33,7 @@ export async function translateBatch(
         targetLanguage,
         segments: chunk.map((s) => s.source),
       },
+      { label: `Translation (${model})` },
     );
     results.push(...res.translations);
     usage.inputTokens += res.usage?.inputTokens ?? 0;

@@ -1,9 +1,10 @@
+import { postJsonRetry, type UsageTotals } from "@/lib/evaluation/fetch-json";
 import type { JuryRating } from "@/lib/types";
 
 export const JURY_PROMPT =
   "You are a translation quality assessment expert. Evaluate the translation considering accuracy, fluency, terminology consistency, and cultural appropriateness for the target locale. Use the following criteria: Good: The translation is accurate, fluent, and is culturally suitable for the target locale. Any issues are negligible and do not affect meaning or usability. - Neutral: should only be used when issues are present but clearly minor and acceptable for the use case. - Bad: The translation contains major errors such as mistranslations, omissions, incorrect terminology, poor fluency, or cultural inappropriateness that affect comprehension or correctness. Respond with exactly one rating: Good, Neutral, or Bad.";
 
-const JURY_BATCH = 25;
+const JURY_BATCH = 15;
 const THROTTLE_MS = 350;
 
 function sleep(ms: number): Promise<void> {
@@ -21,29 +22,7 @@ export interface JurySegmentResult {
   rating: JuryRating;
 }
 
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-}
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let message = `Jury request failed (${res.status}).`;
-    try {
-      const data = await res.json();
-      if (data?.error) message = data.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message);
-  }
-  return res.json() as Promise<T>;
-}
+export type { UsageTotals };
 
 /**
  * Runs the LLM-as-a-jury over a batch of segments using the selected models via
@@ -60,13 +39,17 @@ export async function juryForBatch(
   for (let i = 0; i < items.length; i += JURY_BATCH) {
     if (i > 0) await sleep(THROTTLE_MS);
     const chunk = items.slice(i, i + JURY_BATCH);
-    const { votes, usageByModel: batchUsage } = await postJson<{
+    const { votes, usageByModel: batchUsage } = await postJsonRetry<{
       votes: JuryRating[][];
       usageByModel?: Record<string, UsageTotals>;
-    }>("/api/jury", {
-      models: modelIds,
-      items: chunk,
-    });
+    }>(
+      "/api/jury",
+      {
+        models: modelIds,
+        items: chunk,
+      },
+      { label: "LLM jury" },
+    );
     for (const segVotes of votes) {
       out.push({ votes: segVotes, rating: majorityJuryRating(segVotes) });
     }

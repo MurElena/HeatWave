@@ -1,4 +1,5 @@
 import { qeModelFor } from "@/lib/ai/models";
+import { postJsonRetry, type UsageTotals } from "@/lib/evaluation/fetch-json";
 import {
   DEFAULT_SCORING,
   QE_PROMPT_INTRO,
@@ -7,7 +8,7 @@ import {
   type QePrompt,
 } from "@/lib/settings";
 
-const QE_BATCH = 25;
+const QE_BATCH = 15;
 const THROTTLE_MS = 350;
 
 function sleep(ms: number): Promise<void> {
@@ -33,34 +34,10 @@ interface QeItem {
   hypothesis: string;
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let message = `QE request failed (${res.status}).`;
-    try {
-      const data = await res.json();
-      if (data?.error) message = data.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message);
-  }
-  return res.json() as Promise<T>;
-}
-
 /**
  * Scores a batch of segments with the selected QE model via the AI Gateway,
  * using the QE prompt configured in user settings.
  */
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-}
-
 export async function scoreQeBatch(
   items: QeItem[],
   provider: string,
@@ -74,13 +51,17 @@ export async function scoreQeBatch(
   for (let i = 0; i < items.length; i += QE_BATCH) {
     if (i > 0) await sleep(THROTTLE_MS);
     const chunk = items.slice(i, i + QE_BATCH);
-    const res = await postJson<{ scores: number[]; usage?: UsageTotals }>("/api/qe", {
-      model,
-      intro: QE_PROMPT_INTRO,
-      scoring: prompt.scoring,
-      extraInstructions: prompt.extraInstructions,
-      items: chunk,
-    });
+    const res = await postJsonRetry<{ scores: number[]; usage?: UsageTotals }>(
+      "/api/qe",
+      {
+        model,
+        intro: QE_PROMPT_INTRO,
+        scoring: prompt.scoring,
+        extraInstructions: prompt.extraInstructions,
+        items: chunk,
+      },
+      { label: `QE (${model})` },
+    );
     scores.push(...res.scores);
     usage.inputTokens += res.usage?.inputTokens ?? 0;
     usage.outputTokens += res.usage?.outputTokens ?? 0;
