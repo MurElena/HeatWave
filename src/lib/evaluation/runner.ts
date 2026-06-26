@@ -47,6 +47,13 @@ function phaseProgress(
   return { phase, phaseLabel, percent, message };
 }
 
+// Dataset preparation is fully synchronous (no network I/O), so without a yield
+// React never repaints between its progress updates and the phase appears to be
+// skipped. A short pause lets each step render.
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const PHASE_LABELS: Record<EvaluationMetricId, string> = {
   bleu: "BLEU",
   wer: "WER",
@@ -64,12 +71,14 @@ async function prepareDataset(
   onProgress(
     phaseProgress("dataset-preparation", "Dataset preparation", 5, "Preparing evaluation dataset…"),
   );
+  await sleep(400);
 
   if (uploadedSegments && uploadedSegments.length > 0) {
     onProgress(
       phaseProgress("dataset-preparation", "Dataset preparation", 15, "Cleaning uploaded dataset…"),
     );
     const { segments: cleaned } = cleanSegments(uploadedSegments);
+    await sleep(500);
 
     onProgress(
       phaseProgress(
@@ -79,8 +88,9 @@ async function prepareDataset(
         "Merging with challenge dataset (70% / 30%)…",
       ),
     );
-
     const merged = mergeEvaluationDataset(challengeDataset.segments, cleaned, finalSize);
+    await sleep(500);
+
     onProgress(
       phaseProgress(
         "dataset-preparation",
@@ -89,10 +99,21 @@ async function prepareDataset(
         `Prepared ${merged.segments.length} segments (${merged.challengeCount} challenge + ${merged.newCount} new).`,
       ),
     );
+    await sleep(400);
     return merged.segments;
   }
 
+  onProgress(
+    phaseProgress(
+      "dataset-preparation",
+      "Dataset preparation",
+      55,
+      "Sampling segments from the challenge dataset…",
+    ),
+  );
   const sampled = sampleChallengeDataset(challengeDataset.segments, finalSize);
+  await sleep(500);
+
   onProgress(
     phaseProgress(
       "dataset-preparation",
@@ -101,6 +122,7 @@ async function prepareDataset(
       `Prepared ${sampled.segments.length} segments from challenge dataset.`,
     ),
   );
+  await sleep(400);
   return sampled.segments;
 }
 
