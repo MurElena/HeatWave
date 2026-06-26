@@ -45,6 +45,23 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
     return [...pp].sort((a, b) => nameFor(a.providerId).localeCompare(nameFor(b.providerId)));
   }
 
+  const segmentsById = useMemo(() => {
+    const map: Record<string, ReviewSegment> = {};
+    for (const s of segments) map[s.segmentId] = s;
+    return map;
+  }, [segments]);
+
+  /** The other segment that shares the same source (consistency twin). */
+  function twinOf(seg: ReviewSegment): ReviewSegment | undefined {
+    if (seg.duplicateOfId && segmentsById[seg.duplicateOfId]) {
+      return segmentsById[seg.duplicateOfId];
+    }
+    // Fall back to any other segment with an identical source.
+    return segments.find(
+      (s) => s.segmentId !== seg.segmentId && s.source === seg.source,
+    );
+  }
+
   function setScore(
     segmentId: string,
     providerId: string,
@@ -190,15 +207,54 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
                             Challenge
                           </span>
                         )}
-                        {seg.isDuplicate && (
-                          <span
-                            className="inline-flex cursor-help items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700"
-                            title={`Twin translation: ${seg.twinReference ?? "—"}`}
-                          >
-                            <Copy className="h-3 w-3" />
-                            Duplicate
-                          </span>
-                        )}
+                        {seg.isDuplicate && (() => {
+                          const twin = twinOf(seg);
+                          return (
+                            <span className="group relative inline-flex">
+                              <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
+                                <Copy className="h-3 w-3" />
+                                Duplicate
+                              </span>
+                              <div className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-96 max-w-[80vw] rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl group-hover:block">
+                                <p className="text-xs font-semibold text-slate-700">
+                                  Same source — twin segment results
+                                </p>
+                                {twin ? (
+                                  <>
+                                    <p className="mt-1 text-xs italic text-slate-500">
+                                      “{twin.source}”
+                                    </p>
+                                    <table className="mt-2 w-full text-xs">
+                                      <thead>
+                                        <tr className="text-slate-400">
+                                          <th className="py-1 pr-2 text-left font-medium">Model</th>
+                                          <th className="py-1 text-left font-medium">Translation</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {orderedProviders(twin.perProvider).map((pp) => (
+                                          <tr
+                                            key={pp.providerId}
+                                            className="border-t border-slate-100 align-top"
+                                          >
+                                            <td className="py-1 pr-2 font-medium text-slate-700">
+                                              {nameFor(pp.providerId)}
+                                            </td>
+                                            <td className="py-1 text-slate-600">{pp.hypothesis}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </>
+                                ) : (
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {seg.twinReference ?? "No twin segment found."}
+                                  </p>
+                                )}
+                              </div>
+                            </span>
+                          );
+                        })()}
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{seg.reference}</p>
                     </div>
@@ -225,23 +281,35 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCommit(seg)}
-                          disabled={committed.has(seg.segmentId) || seg.fromChallenge}
-                          className={`rounded-lg p-2 ${
-                            seg.fromChallenge
-                              ? "cursor-not-allowed text-slate-200"
-                              : "text-slate-400 hover:bg-teal-50 hover:text-teal-700 disabled:text-green-500"
-                          }`}
-                          title={
-                            seg.fromChallenge
-                              ? "Already in the challenge dataset"
-                              : "Commit to challenge dataset"
-                          }
-                        >
-                          <GitCommitHorizontal className="h-4 w-4" />
-                        </button>
+                        {(() => {
+                          const isCommitted = committed.has(seg.segmentId);
+                          const locked = isCommitted || seg.fromChallenge;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleCommit(seg)}
+                              disabled={locked}
+                              className={`rounded-lg p-2 ${
+                                locked
+                                  ? "cursor-not-allowed text-slate-300"
+                                  : "text-slate-400 hover:bg-teal-50 hover:text-teal-700"
+                              }`}
+                              title={
+                                seg.fromChallenge
+                                  ? "Already in the challenge dataset"
+                                  : isCommitted
+                                    ? "Saved to the challenge dataset"
+                                    : "Commit to challenge dataset"
+                              }
+                            >
+                              {isCommitted ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <GitCommitHorizontal className="h-4 w-4" />
+                              )}
+                            </button>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>

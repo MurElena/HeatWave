@@ -39,6 +39,9 @@ interface EvaluationWizardProps {
 
 type WizardStep = "dataset" | "upload" | "providers" | "metrics" | "review";
 
+/** Small, fast, low-cost dataset size for demoing on the free tier. */
+const DEMO_SIZE = 50;
+
 const METRIC_OPTIONS: { id: EvaluationMetricId; label: string; description: string }[] = [
   { id: "bleu", label: METRIC_LABELS.bleu, description: "N-gram overlap with reference" },
   { id: "wer", label: METRIC_LABELS.wer, description: "Word error rate vs reference" },
@@ -343,6 +346,9 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                   </label>
                   <span className="text-lg font-semibold tabular-nums text-teal-700">
                     {finalSize}
+                    {finalSize === DEMO_SIZE && (
+                      <span className="ml-1 text-xs font-medium text-coral-600">(Demo)</span>
+                    )}
                   </span>
                 </div>
                 <input
@@ -350,7 +356,7 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                   min={EVALUATION_SIZE_MIN}
                   max={EVALUATION_SIZE_MAX}
                   step={EVALUATION_SIZE_STEP}
-                  value={finalSize}
+                  value={Math.max(finalSize, EVALUATION_SIZE_MIN)}
                   onChange={(e) => setFinalSize(Number(e.target.value))}
                   className="mt-3 w-full accent-teal-600"
                 />
@@ -358,6 +364,21 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                   <span>{EVALUATION_SIZE_MIN}</span>
                   <span>{EVALUATION_SIZE_MAX}</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setFinalSize(DEMO_SIZE)}
+                  className={`mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    finalSize === DEMO_SIZE
+                      ? "border-coral-300 bg-coral-50 text-coral-700"
+                      : "border-slate-200 text-slate-600 hover:border-coral-300 hover:text-coral-700"
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Demo · {DEMO_SIZE} segments
+                </button>
+                <p className="mt-1.5 text-xs text-slate-400">
+                  Use the Demo size for a fast, low-cost run on the free tier.
+                </p>
               </div>
             </div>
           )}
@@ -505,7 +526,10 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                 label="Upload"
                 value={uploadFile ? uploadFile.name : "None (challenge only)"}
               />
-              <ReviewRow label="Final size" value={String(finalSize)} />
+              <ReviewRow
+                label="Final size"
+                value={finalSize === DEMO_SIZE ? `${finalSize} (Demo)` : String(finalSize)}
+              />
               <ReviewRow
                 label="Providers"
                 value={providerIds

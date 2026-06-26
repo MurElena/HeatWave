@@ -271,9 +271,20 @@ export async function runEvaluation(
     );
 
     // Automatic metrics (BLEU, WER, ChrF++) always complete before the GenAI
-    // metrics so they appear first in the progress timeline.
+    // metrics so they appear first in the progress timeline. They compute
+    // instantly, so we yield around each one to let the UI paint it as
+    // running → done instead of flashing past as "pending".
     for (const metric of ["bleu", "wer", "chrf"] as const) {
       if (config.metrics.includes(metric)) {
+        onProgress(
+          phaseProgress(
+            metric,
+            PHASE_LABELS[metric],
+            40,
+            `Scoring ${PHASE_LABELS[metric]} for ${providerName}…`,
+          ),
+        );
+        await sleep(250);
         onProgress(
           phaseProgress(
             metric,
@@ -282,6 +293,7 @@ export async function runEvaluation(
             `${PHASE_LABELS[metric]} complete for ${providerName}.`,
           ),
         );
+        await sleep(150);
       }
     }
 
