@@ -62,12 +62,13 @@ export function LoginModule() {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center">
           <Image
-            src="/logo.png"
+            src="/logo_login.png?v=3"
             alt="HeatWave"
-            width={360}
-            height={360}
+            width={1024}
+            height={512}
             priority
-            className="h-64 w-auto"
+            unoptimized
+            className="w-80 max-w-full h-auto"
           />
         </div>
 

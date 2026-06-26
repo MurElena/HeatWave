@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { X, Upload, User as UserIcon, Trash2 } from "lucide-react";
+import { X, Upload, User as UserIcon, Trash2, Plus, Languages } from "lucide-react";
 import { Portal } from "@/components/ui/Portal";
 import { loadProfile, saveProfile, type UserProfile } from "@/lib/settings";
+import { LANGUAGES, languageLabel } from "@/lib/types";
 
 interface AccountModalProps {
   onClose: () => void;
@@ -15,8 +16,22 @@ export function AccountModal({ onClose, onSaved }: AccountModalProps) {
   const [name, setName] = useState(initial.name);
   const [email, setEmail] = useState(initial.email);
   const [photo, setPhoto] = useState<string | undefined>(initial.photo);
+  const [pairs, setPairs] = useState<string[]>(initial.workLanguagePairs ?? []);
+  const [pairSource, setPairSource] = useState("EN");
+  const [pairTarget, setPairTarget] = useState("DE");
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  function addPair() {
+    if (pairSource === pairTarget) return;
+    const pair = `${pairSource}→${pairTarget}`;
+    if (pairs.includes(pair)) return;
+    setPairs((prev) => [...prev, pair]);
+  }
+
+  function removePair(pair: string) {
+    setPairs((prev) => prev.filter((p) => p !== pair));
+  }
 
   function handlePhoto(file: File | null) {
     if (!file) return;
@@ -26,7 +41,12 @@ export function AccountModal({ onClose, onSaved }: AccountModalProps) {
   }
 
   function handleSave() {
-    const profile: UserProfile = { name: name.trim(), email: email.trim(), photo };
+    const profile: UserProfile = {
+      name: name.trim(),
+      email: email.trim(),
+      photo,
+      workLanguagePairs: pairs,
+    };
     saveProfile(profile);
     onSaved?.(profile);
     onClose();
@@ -108,6 +128,75 @@ export function AccountModal({ onClose, onSaved }: AccountModalProps) {
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-3">
+            <p className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <Languages className="h-4 w-4 text-teal-500" />
+              Work language pairs
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Reviews are only assignable to users who work the evaluation&apos;s language pair.
+            </p>
+
+            {pairs.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {pairs.map((pair) => {
+                  const [src, tgt] = pair.split("→");
+                  return (
+                    <span
+                      key={pair}
+                      className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700"
+                    >
+                      {languageLabel(src)} → {languageLabel(tgt)}
+                      <button
+                        type="button"
+                        onClick={() => removePair(pair)}
+                        className="text-teal-500 hover:text-coral-600"
+                        aria-label="Remove pair"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center gap-2">
+              <select
+                value={pairSource}
+                onChange={(e) => setPairSource(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none"
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-slate-400">→</span>
+              <select
+                value={pairTarget}
+                onChange={(e) => setPairTarget(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none"
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={addPair}
+                disabled={pairSource === pairTarget}
+                className="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-40"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-200 p-3">

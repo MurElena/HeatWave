@@ -33,6 +33,20 @@ export function ResultsView({ run }: ResultsViewProps) {
       ? run.humanWinnerProviderName ?? run.winnerProviderName
       : run.winnerProviderName;
 
+  const inferenceByProvider = useMemo(() => {
+    const map: Record<string, number | undefined> = {};
+    run.providerResults.forEach((r) => {
+      map[r.providerId] = r.inferenceMs;
+    });
+    return map;
+  }, [run.providerResults]);
+
+  function secondsPerSegment(providerId: string): string {
+    const ms = inferenceByProvider[providerId];
+    if (ms === undefined || run.segmentCount === 0) return "n/a";
+    return `${(ms / 1000 / run.segmentCount).toFixed(2)}s`;
+  }
+
   const maxByMetric = useMemo(() => {
     return Object.fromEntries(
       metrics.map((metric) => {
@@ -115,7 +129,7 @@ export function ResultsView({ run }: ResultsViewProps) {
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-slate-900">Provider ranking</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Ranked by aggregated metric score. See AGGREGATED_SCORE_README.md for the formula.
+          Ranked by aggregated metric score.
         </p>
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -127,6 +141,7 @@ export function ResultsView({ run }: ResultsViewProps) {
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Consistency</th>
                 )}
                 <th className="px-4 py-3 text-left font-medium text-slate-600">Aggregated score</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-600">Inference (s/seg)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -150,6 +165,9 @@ export function ResultsView({ run }: ResultsViewProps) {
                   )}
                   <td className="px-4 py-3 font-semibold tabular-nums text-teal-700">
                     {result.aggregatedScore?.toFixed(1) ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 tabular-nums text-slate-700">
+                    {secondsPerSegment(result.providerId)}
                   </td>
                 </tr>
               ))}

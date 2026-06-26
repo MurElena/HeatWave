@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { X, Pencil, Trash2, GitCommitHorizontal, Check, Copy } from "lucide-react";
+import { X, Pencil, Trash2, GitCommitHorizontal, Check, Copy, Database, EyeOff } from "lucide-react";
 import { Portal } from "@/components/ui/Portal";
 import { recalcResultsFromReview } from "@/lib/evaluation/human-recalc";
 import { loadDatasets, updateDataset } from "@/lib/storage/datasets";
@@ -33,6 +33,17 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
 
   const done = review.status === "done";
   const visibleSegments = segments.filter((s) => !s.deleted);
+  const blind = !!(review.blind && review.displayNames);
+
+  function nameFor(providerId: string): string {
+    if (blind) return review.displayNames![providerId] ?? providerId;
+    return review.providerNames[providerId] ?? providerId;
+  }
+
+  function orderedProviders(pp: ReviewSegment["perProvider"]): ReviewSegment["perProvider"] {
+    if (!blind) return pp;
+    return [...pp].sort((a, b) => nameFor(a.providerId).localeCompare(nameFor(b.providerId)));
+  }
 
   function setScore(
     segmentId: string,
@@ -135,7 +146,15 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
         <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">{review.title}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900">{review.title}</h2>
+                {blind && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-white">
+                    <EyeOff className="h-3 w-3" />
+                    Blind
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
                 {languageLabel(review.sourceLanguage)} → {languageLabel(review.targetLanguage)} ·{" "}
                 {visibleSegments.length} segments · from {review.assignedBy}
@@ -162,6 +181,15 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-slate-900">{seg.source}</p>
+                        {seg.fromChallenge && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700"
+                            title="This segment comes from the challenge dataset"
+                          >
+                            <Database className="h-3 w-3" />
+                            Challenge
+                          </span>
+                        )}
                         {seg.isDuplicate && (
                           <span
                             className="inline-flex cursor-help items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700"
@@ -200,9 +228,17 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
                         <button
                           type="button"
                           onClick={() => handleCommit(seg)}
-                          disabled={committed.has(seg.segmentId)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-700 disabled:text-green-500"
-                          title="Commit to challenge dataset"
+                          disabled={committed.has(seg.segmentId) || seg.fromChallenge}
+                          className={`rounded-lg p-2 ${
+                            seg.fromChallenge
+                              ? "cursor-not-allowed text-slate-200"
+                              : "text-slate-400 hover:bg-teal-50 hover:text-teal-700 disabled:text-green-500"
+                          }`}
+                          title={
+                            seg.fromChallenge
+                              ? "Already in the challenge dataset"
+                              : "Commit to challenge dataset"
+                          }
                         >
                           <GitCommitHorizontal className="h-4 w-4" />
                         </button>
@@ -224,10 +260,10 @@ export function ReviewEditor({ review, onClose, onFinished }: ReviewEditorProps)
                         </tr>
                       </thead>
                       <tbody>
-                        {seg.perProvider.map((pp) => (
+                        {orderedProviders(seg.perProvider).map((pp) => (
                           <tr key={pp.providerId} className="border-t border-slate-100">
                             <td className="px-2 py-1 font-medium text-slate-700">
-                              {review.providerNames[pp.providerId] ?? pp.providerId}
+                              {nameFor(pp.providerId)}
                             </td>
                             <td className="px-2 py-1 text-slate-600">{pp.hypothesis}</td>
                             {review.metrics.map((metric) => (

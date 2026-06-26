@@ -8,7 +8,6 @@ import {
   type DatasetFilterState,
 } from "@/components/dataset/DatasetFilters";
 import { isProviderNew, MT_PROVIDERS } from "@/lib/constants/mt-providers";
-import { qeLabelFor } from "@/lib/ai/models";
 import { parseBilingualCsv } from "@/lib/parsers/csv-bilingual";
 import { parseTmx } from "@/lib/parsers/tmx";
 import { parseBilingualXlsx } from "@/lib/parsers/xlsx-bilingual";
@@ -24,7 +23,6 @@ import type {
   DatasetSizeRange,
   EvaluationConfig,
   EvaluationMetricId,
-  QeProviderId,
 } from "@/lib/types";
 import {
   EVALUATION_SIZE_MAX,
@@ -49,12 +47,6 @@ const METRIC_OPTIONS: { id: EvaluationMetricId; label: string; description: stri
   { id: "llm-jury", label: METRIC_LABELS["llm-jury"], description: "Majority vote from 3 LLMs" },
 ];
 
-const QE_OPTIONS: { id: QeProviderId; label: string }[] = [
-  { id: "claude-4-6", label: qeLabelFor("claude-4-6") },
-  { id: "gpt-5-2", label: qeLabelFor("gpt-5-2") },
-  { id: "comet", label: qeLabelFor("comet") },
-];
-
 export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
   const datasets = useMemo(() => loadDatasets(), []);
   const enabledModels = useMemo(() => getEnabledModels(), []);
@@ -72,7 +64,11 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
   const [finalSize, setFinalSize] = useState<number>(600);
   const [providerIds, setProviderIds] = useState<string[]>([]);
   const [metrics, setMetrics] = useState<EvaluationMetricId[]>([]);
-  const [qeProvider, setQeProvider] = useState<QeProviderId | "">("");
+  const [qeProvider, setQeProvider] = useState<string>("");
+  const qeLabel = useMemo(
+    () => enabledModels.find((m) => m.id === qeProvider)?.name ?? qeProvider,
+    [enabledModels, qeProvider],
+  );
   const [juryModelIds, setJuryModelIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,7 +196,7 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
       finalSize,
       providerIds,
       metrics,
-      qeProvider: metrics.includes("qe") ? (qeProvider as QeProviderId) : undefined,
+      qeProvider: metrics.includes("qe") ? qeProvider : undefined,
       juryModelIds: metrics.includes("llm-jury") ? juryModelIds : undefined,
     };
 
@@ -456,17 +452,23 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                           <p className="text-xs font-medium text-slate-600">
                             Select one QE model (uses prompt from Settings):
                           </p>
-                          {QE_OPTIONS.map((qe) => (
-                            <label key={qe.id} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name="qe-provider"
-                                checked={qeProvider === qe.id}
-                                onChange={() => setQeProvider(qe.id)}
-                              />
-                              {qe.label}
-                            </label>
-                          ))}
+                          {enabledModels.length === 0 ? (
+                            <p className="text-xs text-coral-600">
+                              Enable at least one model in Settings → Jury LLMs.
+                            </p>
+                          ) : (
+                            enabledModels.map((model) => (
+                              <label key={model.id} className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name="qe-provider"
+                                  checked={qeProvider === model.id}
+                                  onChange={() => setQeProvider(model.id)}
+                                />
+                                {model.name}
+                              </label>
+                            ))
+                          )}
                         </div>
                       )}
 
@@ -517,7 +519,7 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                 value={metrics.map((m) => METRIC_LABELS[m]).join(", ")}
               />
               {metrics.includes("qe") && qeProvider && (
-                <ReviewRow label="QE model" value={qeLabelFor(qeProvider as QeProviderId)} />
+                <ReviewRow label="QE model" value={qeLabel} />
               )}
               {metrics.includes("llm-jury") && (
                 <ReviewRow

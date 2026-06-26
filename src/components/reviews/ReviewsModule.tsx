@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ClipboardCheck } from "lucide-react";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { ReviewEditor } from "@/components/reviews/ReviewEditor";
+import { ensureDemoReviews } from "@/lib/demo/seed-reviews";
 import { loadProfile } from "@/lib/settings";
 import { loadReviews } from "@/lib/storage/reviews";
 import type { Review } from "@/lib/types";
@@ -24,6 +25,7 @@ export function ReviewsModule() {
 
   useEffect(() => {
     setMounted(true);
+    ensureDemoReviews();
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

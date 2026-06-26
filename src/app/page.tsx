@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Database, BarChart3, History, ClipboardCheck } from "lucide-react";
+import { Database, BarChart3, History, ClipboardCheck, LineChart } from "lucide-react";
 
 const modules = [
   {
@@ -20,12 +20,20 @@ const modules = [
     color: "coral",
   },
   {
+    title: "Dashboard",
+    description: "Track winners, scores, consistency, and inference time over time.",
+    href: "/dashboard",
+    icon: LineChart,
+    available: true,
+    color: "teal",
+  },
+  {
     title: "History",
     description: "Browse past evaluations with winners, metrics, and graphs.",
     href: "/history",
     icon: History,
     available: true,
-    color: "teal",
+    color: "coral",
   },
   {
     title: "My reviews",

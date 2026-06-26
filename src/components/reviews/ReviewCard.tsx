@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, Clock, Layers, User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Clock, Layers, User, ExternalLink } from "lucide-react";
 import type { Review } from "@/lib/types";
 import { METRIC_LABELS, languageLabel } from "@/lib/types";
 
@@ -11,6 +12,7 @@ interface ReviewCardProps {
 
 export function ReviewCard({ review, onOpen }: ReviewCardProps) {
   const done = review.status === "done";
+  const router = useRouter();
 
   return (
     <button
@@ -24,14 +26,36 @@ export function ReviewCard({ review, onOpen }: ReviewCardProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-lg font-semibold text-slate-900">{review.title}</h3>
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            done ? "bg-green-200 text-green-800" : "bg-amber-200 text-amber-800"
-          }`}
-        >
-          {done ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-          {done ? "Completed" : "Pending"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              done ? "bg-green-200 text-green-800" : "bg-amber-200 text-amber-800"
+            }`}
+          >
+            {done ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+            {done ? "Completed" : "Pending"}
+          </span>
+          {done && (
+            <span
+              role="link"
+              tabIndex={0}
+              title="Open results page"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/evaluation/results/${review.evaluationId}`);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  router.push(`/evaluation/results/${review.evaluationId}`);
+                }
+              }}
+              className="inline-flex items-center rounded-lg p-1.5 text-green-700 hover:bg-green-200/60"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 text-xs">

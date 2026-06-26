@@ -1,4 +1,3 @@
-import type { QeProviderId } from "@/lib/types";
 import { qeModelFor } from "@/lib/ai/models";
 import {
   DEFAULT_SCORING,
@@ -59,7 +58,7 @@ export interface UsageTotals {
 
 export async function scoreQeBatch(
   items: QeItem[],
-  provider: QeProviderId,
+  provider: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ scores: number[]; usage: UsageTotals; model: string }> {
   const prompt = getActivePrompt();

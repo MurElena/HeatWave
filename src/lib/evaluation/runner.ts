@@ -175,12 +175,16 @@ export async function runEvaluation(
       ),
     );
 
+    const translateStart =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
     const { translations: hypotheses, usage: translateUsage } = await translateBatch(
       segments.map((s) => ({ source: s.source, target: s.target })),
       providerId,
       sourceLang,
       targetLang,
     );
+    const inferenceMs =
+      (typeof performance !== "undefined" ? performance.now() : Date.now()) - translateStart;
     addUsage(providerId, translateUsage.inputTokens, translateUsage.outputTokens);
 
     const segmentScores: SegmentScore[] = segments.map((seg, i) => ({
@@ -298,6 +302,7 @@ export async function runEvaluation(
       consistencyAvailable: consistency.available,
       duplicateSegmentCount: consistency.duplicateSegmentCount,
       aggregatedScore,
+      inferenceMs,
       rank: 0,
     });
 

@@ -124,8 +124,6 @@ export type EvaluationMetricId =
   | "qe"
   | "llm-jury";
 
-export type QeProviderId = "claude-4-6" | "gpt-5-2" | "comet";
-
 export type JuryRating = "Good" | "Neutral" | "Bad";
 
 export interface MtProvider {
@@ -141,7 +139,8 @@ export interface EvaluationConfig {
   finalSize: number;
   providerIds: string[];
   metrics: EvaluationMetricId[];
-  qeProvider?: QeProviderId;
+  /** AI Gateway model slug used for Quality Estimation. */
+  qeProvider?: string;
   juryModelIds?: string[];
 }
 
@@ -169,6 +168,8 @@ export interface ProviderResult {
   consistencyAvailable?: boolean;
   duplicateSegmentCount?: number;
   aggregatedScore?: number;
+  /** Total wall-clock time spent translating this model's segments, in ms. */
+  inferenceMs?: number;
   rank: number;
 }
 
@@ -250,6 +251,10 @@ export interface Review {
   segments: ReviewSegment[];
   createdAt: string;
   completedAt?: string;
+  /** When true, the reviewer sees randomised placeholder model names. */
+  blind?: boolean;
+  /** providerId → randomised placeholder label (e.g. "Model A"), only when blind. */
+  displayNames?: Record<string, string>;
 }
 
 export type EvaluationProgressPhase =

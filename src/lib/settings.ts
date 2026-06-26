@@ -2,6 +2,8 @@ export interface UserProfile {
   name: string;
   email: string;
   photo?: string;
+  /** Language pairs the user works on, e.g. "EN→DE". */
+  workLanguagePairs?: string[];
 }
 
 export interface LlmModel {
@@ -42,46 +44,21 @@ const SELECTED_PROMPT_KEY = "trans-eval-selected-prompt";
 const DEFAULT_PROFILE: UserProfile = {
   name: "Jane Doe",
   email: "jane.doe@example.com",
+  workLanguagePairs: ["EN→DE", "EN→FR"],
 };
 
-// Default jury LLMs. The id IS the AI Gateway model slug. No API key needed —
-// requests are routed through the gateway with the server-side key.
+// Default jury LLMs — the same gateway models available to run in the demo.
+// The id IS the AI Gateway model slug. No API key needed; requests are routed
+// through the gateway with the server-side key.
 const DEFAULT_MODELS: LlmModel[] = [
-  {
-    id: "openai/gpt-5.4",
-    name: "GPT-5.4",
-    provider: "OpenAI",
-    apiKey: "",
-    enabled: true,
-  },
-  {
-    id: "anthropic/claude-sonnet-4.6",
-    name: "Claude Sonnet 4.6",
-    provider: "Anthropic",
-    apiKey: "",
-    enabled: true,
-  },
-  {
-    id: "google/gemini-3-flash",
-    name: "Gemini 3 Flash",
-    provider: "Google",
-    apiKey: "",
-    enabled: true,
-  },
-  {
-    id: "xai/grok-4.3",
-    name: "Grok 4.3",
-    provider: "xAI",
-    apiKey: "",
-    enabled: false,
-  },
-  {
-    id: "meta/llama-4-maverick",
-    name: "Llama 4 Maverick",
-    provider: "Meta",
-    apiKey: "",
-    enabled: false,
-  },
+  { id: "openai/gpt-5.4", name: "GPT-5.4", provider: "OpenAI", apiKey: "", enabled: true },
+  { id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6", provider: "Anthropic", apiKey: "", enabled: true },
+  { id: "google/gemini-3-flash", name: "Gemini 3 Flash", provider: "Google", apiKey: "", enabled: true },
+  { id: "deepseek/deepseek-v3.2", name: "DeepSeek V3.2", provider: "DeepSeek", apiKey: "", enabled: false },
+  { id: "mistral/mistral-large-3", name: "Mistral Large 3", provider: "Mistral", apiKey: "", enabled: false },
+  { id: "meta/llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", apiKey: "", enabled: false },
+  { id: "xai/grok-4.3", name: "Grok 4.3", provider: "xAI", apiKey: "", enabled: false },
+  { id: "alibaba/qwen3-max", name: "Qwen3 Max", provider: "Alibaba", apiKey: "", enabled: false },
 ];
 
 function read<T>(key: string, fallback: T): T {
