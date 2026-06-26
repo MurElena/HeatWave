@@ -1,4 +1,4 @@
-import { MT_PROVIDERS } from "@/lib/constants/mt-providers";
+import { MODEL_CATALOG } from "@/lib/settings";
 import { saveEvaluationRun } from "@/lib/storage/evaluations";
 import { saveHistoryFromEvaluation } from "@/lib/storage/history";
 import type {
@@ -33,7 +33,7 @@ const SCENARIOS: Scenario[] = [
 const METRICS: EvaluationMetricId[] = ["bleu", "chrf", "qe", "llm-jury"];
 
 // A few models per run, with a slowly drifting baseline so trends look real.
-const POOL = MT_PROVIDERS.slice(0, 5);
+const POOL = MODEL_CATALOG.filter((m) => m.translation).slice(0, 5);
 
 function seeded(n: number): () => number {
   let s = n % 2147483647;
@@ -117,11 +117,11 @@ function buildRun(scenario: Scenario, index: number, createdAt: string): Evaluat
     finalSize: segmentCount,
     providerIds: models.map((m) => m.id),
     metrics: METRICS,
-    qeProvider: "openai/gpt-5.4",
+    qeProvider: "openai/gpt-4o-mini",
     juryModelIds: [
-      "openai/gpt-5.4",
-      "anthropic/claude-sonnet-4.6",
-      "google/gemini-3-flash",
+      "openai/gpt-4o-mini",
+      "google/gemini-2.5",
+      "anthropic/claude-haiku-4.5",
     ],
   };
 

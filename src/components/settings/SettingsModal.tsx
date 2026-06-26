@@ -6,14 +6,7 @@ import { Portal } from "@/components/ui/Portal";
 import { ApiKeysTab } from "@/components/settings/ApiKeysTab";
 import { ModelsToTestTab } from "@/components/settings/ModelsToTestTab";
 import { QePromptsTab } from "@/components/settings/QePromptsTab";
-import {
-  loadModels,
-  saveModels,
-  loadMtConfig,
-  saveMtConfig,
-  type LlmModel,
-  type MtProviderConfig,
-} from "@/lib/settings";
+import { loadModels, saveModels, type LlmModel } from "@/lib/settings";
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -24,11 +17,9 @@ type Tab = "models-to-test" | "api-keys" | "prompts";
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const [tab, setTab] = useState<Tab>("models-to-test");
   const [models, setModels] = useState<LlmModel[]>(() => loadModels());
-  const [mtConfig, setMtConfig] = useState<MtProviderConfig>(() => loadMtConfig());
 
   function handleClose() {
     saveModels(models);
-    saveMtConfig(mtConfig);
     onClose();
   }
 
@@ -77,7 +68,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {tab === "models-to-test" && (
-            <ModelsToTestTab config={mtConfig} onChange={setMtConfig} />
+            <ModelsToTestTab models={models} onChange={setModels} />
           )}
           {tab === "api-keys" && <ApiKeysTab models={models} onChange={setModels} />}
           {tab === "prompts" && <QePromptsTab />}

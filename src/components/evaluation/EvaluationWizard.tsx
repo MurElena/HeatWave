@@ -7,15 +7,15 @@ import {
   EMPTY_FILTERS,
   type DatasetFilterState,
 } from "@/components/dataset/DatasetFilters";
-import { isProviderNew, MT_PROVIDERS } from "@/lib/constants/mt-providers";
+import { isProviderNew } from "@/lib/constants/mt-providers";
 import { parseBilingualCsv } from "@/lib/parsers/csv-bilingual";
 import { parseTmx } from "@/lib/parsers/tmx";
 import { parseBilingualXlsx } from "@/lib/parsers/xlsx-bilingual";
 import {
-  getEnabledModels,
+  getJuryModels,
+  getQeModels,
+  getTranslationModels,
   hasEnoughJuryModels,
-  isMtProviderEnabled,
-  loadMtConfig,
 } from "@/lib/settings";
 import { loadDatasets } from "@/lib/storage/datasets";
 import type {
@@ -49,12 +49,10 @@ const METRIC_OPTIONS: { id: EvaluationMetricId; label: string; description: stri
 
 export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
   const datasets = useMemo(() => loadDatasets(), []);
-  const enabledModels = useMemo(() => getEnabledModels(), []);
+  const qeModels = useMemo(() => getQeModels(), []);
+  const juryModels = useMemo(() => getJuryModels(), []);
   const juryAvailable = hasEnoughJuryModels();
-  const connectedProviders = useMemo(() => {
-    const config = loadMtConfig();
-    return MT_PROVIDERS.filter((p) => isMtProviderEnabled(p.id, config));
-  }, []);
+  const connectedProviders = useMemo(() => getTranslationModels(), []);
 
   const [step, setStep] = useState<WizardStep>("dataset");
   const [title, setTitle] = useState("");
@@ -66,8 +64,8 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
   const [metrics, setMetrics] = useState<EvaluationMetricId[]>([]);
   const [qeProvider, setQeProvider] = useState<string>("");
   const qeLabel = useMemo(
-    () => enabledModels.find((m) => m.id === qeProvider)?.name ?? qeProvider,
-    [enabledModels, qeProvider],
+    () => qeModels.find((m) => m.id === qeProvider)?.name ?? qeProvider,
+    [qeModels, qeProvider],
   );
   const [juryModelIds, setJuryModelIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -124,8 +122,8 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
       if (!next.includes("qe")) setQeProvider("");
       if (!next.includes("llm-jury")) {
         setJuryModelIds([]);
-      } else if (enabledModels.length === 3) {
-        setJuryModelIds(enabledModels.map((m) => m.id));
+      } else if (juryModels.length === 3) {
+        setJuryModelIds(juryModels.map((m) => m.id));
       }
       return next;
     });
@@ -452,12 +450,12 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                           <p className="text-xs font-medium text-slate-600">
                             Select one QE model (uses prompt from Settings):
                           </p>
-                          {enabledModels.length === 0 ? (
+                          {qeModels.length === 0 ? (
                             <p className="text-xs text-coral-600">
-                              Enable at least one model in Settings → Jury LLMs.
+                              Enable at least one QE-capable model in Settings → Jury LLMs.
                             </p>
                           ) : (
-                            enabledModels.map((model) => (
+                            qeModels.map((model) => (
                               <label key={model.id} className="flex items-center gap-2 text-sm">
                                 <input
                                   type="radio"
@@ -477,7 +475,7 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                           <p className="text-xs font-medium text-slate-600">
                             Select exactly 3 LLMs ({juryModelIds.length}/3):
                           </p>
-                          {enabledModels.map((model) => (
+                          {juryModels.map((model) => (
                             <label key={model.id} className="flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
@@ -511,7 +509,7 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
               <ReviewRow
                 label="Providers"
                 value={providerIds
-                  .map((id) => MT_PROVIDERS.find((p) => p.id === id)?.name ?? id)
+                  .map((id) => connectedProviders.find((p) => p.id === id)?.name ?? id)
                   .join(", ")}
               />
               <ReviewRow
@@ -525,7 +523,7 @@ export function EvaluationWizard({ onLaunch, onClose }: EvaluationWizardProps) {
                 <ReviewRow
                   label="Jury models"
                   value={juryModelIds
-                    .map((id) => enabledModels.find((m) => m.id === id)?.name ?? id)
+                    .map((id) => juryModels.find((m) => m.id === id)?.name ?? id)
                     .join(", ")}
                 />
               )}

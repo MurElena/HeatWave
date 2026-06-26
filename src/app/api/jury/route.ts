@@ -47,23 +47,30 @@ export async function POST(req: Request) {
     // Each model rates every segment. votesByModel[m][s] = rating.
     const perModel = await Promise.all(
       models.map(async (model) => {
-        const { output, usage } = await generateText({
-          model,
-          system: JURY_PROMPT,
-          prompt:
-            `Rate each translation below as exactly one of Good, Neutral, or Bad, ` +
-            `following the criteria. Return one rating per segment, in order.\n\n${blocks}`,
-          output: Output.object({
-            schema: z.object({
-              ratings: z
-                .array(RatingSchema)
-                .describe("One rating (Good/Neutral/Bad) per segment, in order."),
+        let output: { ratings?: ("Good" | "Neutral" | "Bad")[] } | undefined;
+        let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+        try {
+          ({ output, usage } = await generateText({
+            model,
+            system: JURY_PROMPT,
+            prompt:
+              `Rate each translation below as exactly one of Good, Neutral, or Bad, ` +
+              `following the criteria. Return one rating per segment, in order.\n\n${blocks}`,
+            output: Output.object({
+              schema: z.object({
+                ratings: z
+                  .array(RatingSchema)
+                  .describe("One rating (Good/Neutral/Bad) per segment, in order."),
+              }),
             }),
-          }),
-          providerOptions: {
-            gateway: { tags: ["feature:mt-eval", "phase:jury"] },
-          },
-        });
+            providerOptions: {
+              gateway: { tags: ["feature:mt-eval", "phase:jury"] },
+            },
+          }));
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "jury model failed.";
+          throw new Error(`${model}: ${detail}`);
+        }
         let ratings = output?.ratings ?? [];
         if (ratings.length < items.length) {
           ratings = [...ratings, ...Array(items.length - ratings.length).fill("Neutral")];

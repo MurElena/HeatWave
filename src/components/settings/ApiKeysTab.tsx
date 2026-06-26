@@ -25,21 +25,32 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
     const name = newName.trim();
     const slug = newSlug.trim();
     if (!name || !slug) return;
-    onChange([
-      ...models,
-      {
-        id: slug,
-        name,
-        provider: slug.split("/")[0] || "Custom",
-        apiKey: "",
-        enabled: true,
-      },
-    ]);
+    if (models.some((m) => m.id === slug)) {
+      onChange(
+        models.map((m) =>
+          m.id === slug ? { ...m, enabled: true, qe: true, jury: true } : m,
+        ),
+      );
+    } else {
+      onChange([
+        ...models,
+        {
+          id: slug,
+          name,
+          provider: slug.split("/")[0] || "Custom",
+          apiKey: "",
+          enabled: true,
+          qe: true,
+          jury: true,
+        },
+      ]);
+    }
     setNewName("");
     setNewSlug("");
   }
 
-  const enabledCount = models.filter((m) => m.enabled).length;
+  const juryModels = models.filter((m) => m.qe || m.jury);
+  const enabledCount = juryModels.filter((m) => m.enabled && m.jury).length;
 
   return (
     <div className="space-y-4">
@@ -53,7 +64,7 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
       </div>
 
       <div className="space-y-2">
-        {models.map((model) => (
+        {juryModels.map((model) => (
           <div
             key={model.id}
             className={`rounded-xl border p-3 ${

@@ -83,9 +83,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err) {
-    return Response.json(
-      { error: err instanceof Error ? err.message : "QE scoring failed." },
-      { status: 502 },
-    );
+    const detail = err instanceof Error ? err.message : "QE scoring failed.";
+    return Response.json({ error: `${model}: ${detail}` }, { status: 502 });
   }
 }

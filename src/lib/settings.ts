@@ -16,6 +16,14 @@ export interface LlmModel {
    */
   apiKey: string;
   enabled: boolean;
+  /** Can be used as a translation model (appears under "Models to test"). */
+  translation?: boolean;
+  /** Can be used as the QE scorer. */
+  qe?: boolean;
+  /** Can sit on the LLM-as-a-jury panel. */
+  jury?: boolean;
+  /** ISO date the model was added; recent ones are flagged "New". */
+  addedAt?: string;
 }
 
 export interface QePrompt {
@@ -47,19 +55,28 @@ const DEFAULT_PROFILE: UserProfile = {
   workLanguagePairs: ["EN→DE", "EN→FR"],
 };
 
-// Default jury LLMs — the same gateway models available to run in the demo.
-// The id IS the AI Gateway model slug. No API key needed; requests are routed
-// through the gateway with the server-side key.
-const DEFAULT_MODELS: LlmModel[] = [
-  { id: "openai/gpt-5.4", name: "GPT-5.4", provider: "OpenAI", apiKey: "", enabled: true },
-  { id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6", provider: "Anthropic", apiKey: "", enabled: true },
-  { id: "google/gemini-3-flash", name: "Gemini 3 Flash", provider: "Google", apiKey: "", enabled: true },
-  { id: "deepseek/deepseek-v3.2", name: "DeepSeek V3.2", provider: "DeepSeek", apiKey: "", enabled: false },
-  { id: "mistral/mistral-large-3", name: "Mistral Large 3", provider: "Mistral", apiKey: "", enabled: false },
-  { id: "meta/llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", apiKey: "", enabled: false },
-  { id: "xai/grok-4.3", name: "Grok 4.3", provider: "xAI", apiKey: "", enabled: false },
-  { id: "alibaba/qwen3-max", name: "Qwen3 Max", provider: "Alibaba", apiKey: "", enabled: false },
+// The single source of truth for available models. The id IS the AI Gateway
+// model slug. No API key needed; requests are routed through the gateway with
+// the server-side key. Every model below is usable on Vercel's free tier.
+// Capabilities decide where the model shows up:
+//   translation -> Settings → Models to test (and the wizard provider step)
+//   qe          -> the QE scorer picker
+//   jury        -> the LLM-as-a-jury panel
+export const MODEL_CATALOG: LlmModel[] = [
+  { id: "openai/gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", apiKey: "", enabled: true, translation: true, qe: true },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", apiKey: "", enabled: true, translation: true, qe: true, jury: true },
+  { id: "google/gemini-2.5", name: "Gemini 2.5", provider: "Google", apiKey: "", enabled: true, translation: true, qe: true, jury: true },
+  { id: "openai/gpt-5.4-nano", name: "GPT-5.4 Nano", provider: "OpenAI", apiKey: "", enabled: true, translation: true, qe: true },
+  { id: "deepseek/deepseek-v3.2", name: "DeepSeek V3.2", provider: "DeepSeek", apiKey: "", enabled: true, translation: true },
+  { id: "google/gemma-4-26b-a4b-it", name: "Gemma 4 26B", provider: "Google", apiKey: "", enabled: true, translation: true },
+  { id: "xai/grok-4.1-fast-non-reasoning", name: "Grok 4.1 Fast", provider: "xAI", apiKey: "", enabled: true, translation: true },
+  { id: "mistral/ministral-3b", name: "Ministral 3B", provider: "Mistral", apiKey: "", enabled: true, translation: true },
+  { id: "meta/llama-3.3-70b", name: "Llama 3.3 70B", provider: "Meta", apiKey: "", enabled: true, translation: true },
+  { id: "perplexity/sonar", name: "Sonar", provider: "Perplexity", apiKey: "", enabled: true, translation: true },
+  { id: "anthropic/claude-haiku-4.5", name: "Claude Haiku 4.5", provider: "Anthropic", apiKey: "", enabled: true, translation: true, qe: true, jury: true },
 ];
+
+const DEFAULT_MODELS: LlmModel[] = MODEL_CATALOG;
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -85,7 +102,15 @@ export function saveProfile(profile: UserProfile): void {
 }
 
 export function loadModels(): LlmModel[] {
-  return read(MODELS_KEY, DEFAULT_MODELS);
+  const stored = read<LlmModel[] | null>(MODELS_KEY, null);
+  if (!stored || stored.length === 0) return DEFAULT_MODELS;
+  // Migrate legacy data saved before models carried capability flags.
+  const hasCapabilities = stored.some((m) => m.translation || m.qe || m.jury);
+  if (!hasCapabilities) {
+    write(MODELS_KEY, DEFAULT_MODELS);
+    return DEFAULT_MODELS;
+  }
+  return stored;
 }
 
 export function saveModels(models: LlmModel[]): void {
@@ -108,30 +133,21 @@ export function saveSelectedPromptId(id: string): void {
   write(SELECTED_PROMPT_KEY, id);
 }
 
-export function getEnabledModels(): LlmModel[] {
-  return loadModels().filter((m) => m.enabled);
+/** Enabled models that can produce translations (the wizard providers). */
+export function getTranslationModels(): LlmModel[] {
+  return loadModels().filter((m) => m.enabled && m.translation);
+}
+
+/** Enabled models that can act as the QE scorer. */
+export function getQeModels(): LlmModel[] {
+  return loadModels().filter((m) => m.enabled && m.qe);
+}
+
+/** Enabled models that can sit on the LLM-as-a-jury panel. */
+export function getJuryModels(): LlmModel[] {
+  return loadModels().filter((m) => m.enabled && m.jury);
 }
 
 export function hasEnoughJuryModels(): boolean {
-  return getEnabledModels().length >= 3;
-}
-
-// Which MT providers are enabled for testing. Models are powered by the Vercel
-// AI Gateway, so no per-provider key is needed — this is just an on/off map.
-export type MtProviderConfig = Record<string, boolean>;
-
-const MT_CONFIG_KEY = "trans-eval-mt-enabled";
-
-export function loadMtConfig(): MtProviderConfig {
-  return read(MT_CONFIG_KEY, {});
-}
-
-export function saveMtConfig(config: MtProviderConfig): void {
-  write(MT_CONFIG_KEY, config);
-}
-
-export function isMtProviderEnabled(id: string, config?: MtProviderConfig): boolean {
-  const c = config ?? loadMtConfig();
-  // Default to enabled when not explicitly disabled.
-  return c[id] !== false;
+  return getJuryModels().length >= 3;
 }
