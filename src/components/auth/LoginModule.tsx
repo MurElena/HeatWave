@@ -61,13 +61,26 @@ export function LoginModule() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-teal-50 via-white to-coral-50 px-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center">
+          {/* Keys out the solid black background baked into the logo PNG so it
+              sits transparently on the light page. */}
+          <svg width="0" height="0" className="absolute" aria-hidden="true">
+            <defs>
+              <filter id="logoBlackKey" colorInterpolationFilters="sRGB">
+                <feColorMatrix
+                  type="matrix"
+                  values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  3 3 3 0 0"
+                />
+              </filter>
+            </defs>
+          </svg>
           <Image
-            src="/logo_login.png?v=3"
+            src="/logo_login.png?v=4"
             alt="HeatWave"
             width={1024}
             height={512}
             priority
             unoptimized
+            style={{ filter: "url(#logoBlackKey)" }}
             className="w-80 max-w-full h-auto"
           />
         </div>
