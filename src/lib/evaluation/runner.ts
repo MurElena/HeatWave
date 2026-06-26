@@ -20,6 +20,7 @@ import { computeAggregatedScore, rankByAggregatedScore } from "@/lib/evaluation/
 import type {
   ChallengeDataset,
   EvaluationConfig,
+  EvaluationFailure,
   EvaluationMetricId,
   EvaluationProgress,
   EvaluationRun,
@@ -153,6 +154,21 @@ export async function runEvaluation(
   const providerResults: ProviderResult[] = [];
   const usageByModel: UsageByModel = {};
   let consistencyAvailable = false;
+  const failures: EvaluationFailure[] = [];
+  // Once a GenAI metric fails (usually a rate limit), stop attempting it for the
+  // remaining providers and drop it from the results so the run can finish.
+  const droppedMetrics = new Set<EvaluationMetricId>();
+
+  function recordMetricFailure(metric: EvaluationMetricId, err: unknown): void {
+    if (droppedMetrics.has(metric)) return;
+    droppedMetrics.add(metric);
+    failures.push({
+      kind: "metric",
+      id: metric,
+      name: METRIC_LABELS[metric],
+      reason: err instanceof Error ? err.message : "Metric failed.",
+    });
+  }
 
   function addUsage(model: string, input: number, output: number): void {
     const cur = usageByModel[model] ?? { inputTokens: 0, outputTokens: 0 };
@@ -168,7 +184,7 @@ export async function runEvaluation(
 
     onProgress(
       phaseProgress(
-        "dataset-preparation",
+        "translation",
         "Translation",
         Math.round((p / config.providerIds.length) * 100),
         `Translating with ${providerName}…`,
@@ -177,12 +193,41 @@ export async function runEvaluation(
 
     const translateStart =
       typeof performance !== "undefined" ? performance.now() : Date.now();
-    const { translations: hypotheses, usage: translateUsage } = await translateBatch(
-      segments.map((s) => ({ source: s.source, target: s.target })),
-      providerId,
-      sourceLang,
-      targetLang,
-    );
+    let hypotheses: string[];
+    let translateUsage: { inputTokens: number; outputTokens: number };
+    try {
+      ({ translations: hypotheses, usage: translateUsage } = await translateBatch(
+        segments.map((s) => ({ source: s.source, target: s.target })),
+        providerId,
+        sourceLang,
+        targetLang,
+        (done, total) =>
+          onProgress(
+            phaseProgress(
+              "translation",
+              "Translation",
+              Math.round((done / total) * 100),
+              `Translating with ${providerName} (${done}/${total})…`,
+            ),
+          ),
+      ));
+    } catch (err) {
+      failures.push({
+        kind: "provider",
+        id: providerId,
+        name: providerName,
+        reason: err instanceof Error ? err.message : "Translation failed.",
+      });
+      onProgress(
+        phaseProgress(
+          "translation",
+          "Translation",
+          Math.round(((p + 1) / config.providerIds.length) * 100),
+          `Skipped ${providerName} (translation failed).`,
+        ),
+      );
+      continue;
+    }
     const inferenceMs =
       (typeof performance !== "undefined" ? performance.now() : Date.now()) - translateStart;
     addUsage(providerId, translateUsage.inputTokens, translateUsage.outputTokens);
@@ -203,8 +248,23 @@ export async function runEvaluation(
       segmentScores,
     );
 
-    for (const metric of config.metrics) {
-      if (metric === "qe" && config.qeProvider) {
+    // Automatic metrics (BLEU, WER, ChrF++) always complete before the GenAI
+    // metrics so they appear first in the progress timeline.
+    for (const metric of ["bleu", "wer", "chrf"] as const) {
+      if (config.metrics.includes(metric)) {
+        onProgress(
+          phaseProgress(
+            metric,
+            PHASE_LABELS[metric],
+            100,
+            `${PHASE_LABELS[metric]} complete for ${providerName}.`,
+          ),
+        );
+      }
+    }
+
+    if (config.metrics.includes("qe") && config.qeProvider && !droppedMetrics.has("qe")) {
+      try {
         onProgress(
           phaseProgress("qe", PHASE_LABELS.qe, 10, `Running QE for ${providerName}…`),
         );
@@ -231,9 +291,18 @@ export async function runEvaluation(
         });
         aggregateScores = { ...aggregateScores, qe: corpusQe(qeScores) };
         onProgress(phaseProgress("qe", PHASE_LABELS.qe, 100, `QE complete for ${providerName}.`));
+      } catch (err) {
+        recordMetricFailure("qe", err);
+        onProgress(phaseProgress("qe", PHASE_LABELS.qe, 100, `QE removed (failed).`));
       }
+    }
 
-      if (metric === "llm-jury" && config.juryModelIds?.length === 3) {
+    if (
+      config.metrics.includes("llm-jury") &&
+      config.juryModelIds?.length === 3 &&
+      !droppedMetrics.has("llm-jury")
+    ) {
+      try {
         onProgress(
           phaseProgress("llm-jury", PHASE_LABELS["llm-jury"], 10, `Running LLM jury for ${providerName}…`),
         );
@@ -270,16 +339,10 @@ export async function runEvaluation(
         onProgress(
           phaseProgress("llm-jury", PHASE_LABELS["llm-jury"], 100, `LLM jury complete for ${providerName}.`),
         );
-      }
-
-      if (["bleu", "wer", "chrf"].includes(metric)) {
+      } catch (err) {
+        recordMetricFailure("llm-jury", err);
         onProgress(
-          phaseProgress(
-            metric as EvaluationMetricId,
-            PHASE_LABELS[metric as EvaluationMetricId],
-            100,
-            `${PHASE_LABELS[metric as EvaluationMetricId]} complete for ${providerName}.`,
-          ),
+          phaseProgress("llm-jury", PHASE_LABELS["llm-jury"], 100, `LLM jury removed (failed).`),
         );
       }
     }
@@ -316,6 +379,29 @@ export async function runEvaluation(
     );
   }
 
+  if (providerResults.length === 0) {
+    const reason = failures[0]?.reason ?? "All translation models failed.";
+    throw new Error(`Evaluation failed — every model errored. ${reason}`);
+  }
+
+  // Drop any metric that failed so the ranking is consistent across providers
+  // that were processed before vs. after the failure.
+  if (droppedMetrics.size > 0) {
+    for (const result of providerResults) {
+      for (const metric of droppedMetrics) {
+        delete result.aggregateScores[metric];
+        for (const seg of result.segmentScores) {
+          delete seg.scores[metric];
+        }
+      }
+      result.aggregatedScore = computeAggregatedScore(
+        result.aggregateScores,
+        result.consistencyScore ?? 0,
+        result.consistencyAvailable ?? false,
+      );
+    }
+  }
+
   onProgress(phaseProgress("ranking", "Ranking", 95, "Comparing aggregated scores and ranking providers…"));
 
   const ranked = rankByAggregatedScore(providerResults);
@@ -337,6 +423,7 @@ export async function runEvaluation(
     winnerProviderId: winner?.providerId ?? "",
     winnerProviderName: winner?.providerName ?? "—",
     createdAt: new Date().toISOString(),
+    failures: failures.length > 0 ? failures : undefined,
   };
 
   onProgress(

@@ -50,6 +50,7 @@ export async function POST(req: Request) {
   try {
     const { output, usage } = await generateText({
       model,
+      maxRetries: 4,
       system,
       prompt:
         `Score the quality of each translation below from 0 to 100 based on the ` +

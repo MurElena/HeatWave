@@ -1,4 +1,10 @@
-const TRANSLATE_BATCH = 20;
+const TRANSLATE_BATCH = 50;
+// Small pause between gateway calls to stay under free-tier rate limits.
+const THROTTLE_MS = 350;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -34,6 +40,7 @@ export async function translateBatch(
   const results: string[] = [];
   const usage: UsageTotals = { inputTokens: 0, outputTokens: 0 };
   for (let i = 0; i < segments.length; i += TRANSLATE_BATCH) {
+    if (i > 0) await sleep(THROTTLE_MS);
     const chunk = segments.slice(i, i + TRANSLATE_BATCH);
     const res = await postJson<{ translations: string[]; usage?: UsageTotals }>(
       "/api/translate",

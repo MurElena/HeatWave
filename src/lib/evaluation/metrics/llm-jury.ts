@@ -3,7 +3,12 @@ import type { JuryRating } from "@/lib/types";
 export const JURY_PROMPT =
   "You are a translation quality assessment expert. Evaluate the translation considering accuracy, fluency, terminology consistency, and cultural appropriateness for the target locale. Use the following criteria: Good: The translation is accurate, fluent, and is culturally suitable for the target locale. Any issues are negligible and do not affect meaning or usability. - Neutral: should only be used when issues are present but clearly minor and acceptable for the use case. - Bad: The translation contains major errors such as mistranslations, omissions, incorrect terminology, poor fluency, or cultural inappropriateness that affect comprehension or correctness. Respond with exactly one rating: Good, Neutral, or Bad.";
 
-const JURY_BATCH = 15;
+const JURY_BATCH = 25;
+const THROTTLE_MS = 350;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface JuryItem {
   source: string;
@@ -53,6 +58,7 @@ export async function juryForBatch(
   const usageByModel: Record<string, UsageTotals> = {};
 
   for (let i = 0; i < items.length; i += JURY_BATCH) {
+    if (i > 0) await sleep(THROTTLE_MS);
     const chunk = items.slice(i, i + JURY_BATCH);
     const { votes, usageByModel: batchUsage } = await postJson<{
       votes: JuryRating[][];

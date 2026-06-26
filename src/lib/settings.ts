@@ -15,7 +15,14 @@ export interface LlmModel {
    * served through the Vercel AI Gateway using the server-side gateway key.
    */
   apiKey: string;
+  /** On/off as a translation model (the "Models to test" tab). */
   enabled: boolean;
+  /**
+   * On/off as a judge for QE and LLM-as-a-jury (the "Jury LLMs" tab). Kept
+   * separate from `enabled` so toggling a model off for translation does not
+   * also remove it from the jury. Defaults to on when undefined (legacy data).
+   */
+  enabledJury?: boolean;
   /** Can be used as a translation model (appears under "Models to test"). */
   translation?: boolean;
   /** Can be used as the QE scorer. */
@@ -63,17 +70,17 @@ const DEFAULT_PROFILE: UserProfile = {
 //   qe          -> the QE scorer picker
 //   jury        -> the LLM-as-a-jury panel
 export const MODEL_CATALOG: LlmModel[] = [
-  { id: "openai/gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", apiKey: "", enabled: true, translation: true, qe: true },
-  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", apiKey: "", enabled: true, translation: true, qe: true, jury: true },
-  { id: "google/gemini-2.5", name: "Gemini 2.5", provider: "Google", apiKey: "", enabled: true, translation: true, qe: true, jury: true },
-  { id: "openai/gpt-5.4-nano", name: "GPT-5.4 Nano", provider: "OpenAI", apiKey: "", enabled: true, translation: true, qe: true },
+  { id: "openai/gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", apiKey: "", enabled: true, enabledJury: true, translation: true, qe: true },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", apiKey: "", enabled: true, enabledJury: true, translation: true, qe: true, jury: true },
+  { id: "google/gemini-2.5", name: "Gemini 2.5", provider: "Google", apiKey: "", enabled: true, enabledJury: true, translation: true, qe: true, jury: true },
+  { id: "openai/gpt-5.4-nano", name: "GPT-5.4 Nano", provider: "OpenAI", apiKey: "", enabled: true, enabledJury: true, translation: true, qe: true },
   { id: "deepseek/deepseek-v3.2", name: "DeepSeek V3.2", provider: "DeepSeek", apiKey: "", enabled: true, translation: true },
   { id: "google/gemma-4-26b-a4b-it", name: "Gemma 4 26B", provider: "Google", apiKey: "", enabled: true, translation: true },
   { id: "xai/grok-4.1-fast-non-reasoning", name: "Grok 4.1 Fast", provider: "xAI", apiKey: "", enabled: true, translation: true },
   { id: "mistral/ministral-3b", name: "Ministral 3B", provider: "Mistral", apiKey: "", enabled: true, translation: true },
   { id: "meta/llama-3.3-70b", name: "Llama 3.3 70B", provider: "Meta", apiKey: "", enabled: true, translation: true },
   { id: "perplexity/sonar", name: "Sonar", provider: "Perplexity", apiKey: "", enabled: true, translation: true },
-  { id: "anthropic/claude-haiku-4.5", name: "Claude Haiku 4.5", provider: "Anthropic", apiKey: "", enabled: true, translation: true, qe: true, jury: true },
+  { id: "anthropic/claude-haiku-4.5", name: "Claude Haiku 4.5", provider: "Anthropic", apiKey: "", enabled: true, enabledJury: true, translation: true, qe: true, jury: true },
 ];
 
 const DEFAULT_MODELS: LlmModel[] = MODEL_CATALOG;
@@ -138,14 +145,14 @@ export function getTranslationModels(): LlmModel[] {
   return loadModels().filter((m) => m.enabled && m.translation);
 }
 
-/** Enabled models that can act as the QE scorer. */
+/** Models enabled as judges that can act as the QE scorer. */
 export function getQeModels(): LlmModel[] {
-  return loadModels().filter((m) => m.enabled && m.qe);
+  return loadModels().filter((m) => m.qe && (m.enabledJury ?? true));
 }
 
-/** Enabled models that can sit on the LLM-as-a-jury panel. */
+/** Models enabled as judges that can sit on the LLM-as-a-jury panel. */
 export function getJuryModels(): LlmModel[] {
-  return loadModels().filter((m) => m.enabled && m.jury);
+  return loadModels().filter((m) => m.jury && (m.enabledJury ?? true));
 }
 
 export function hasEnoughJuryModels(): boolean {

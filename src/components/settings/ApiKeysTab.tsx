@@ -28,7 +28,7 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
     if (models.some((m) => m.id === slug)) {
       onChange(
         models.map((m) =>
-          m.id === slug ? { ...m, enabled: true, qe: true, jury: true } : m,
+          m.id === slug ? { ...m, enabledJury: true, qe: true, jury: true } : m,
         ),
       );
     } else {
@@ -39,7 +39,8 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
           name,
           provider: slug.split("/")[0] || "Custom",
           apiKey: "",
-          enabled: true,
+          enabled: false,
+          enabledJury: true,
           qe: true,
           jury: true,
         },
@@ -50,7 +51,7 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
   }
 
   const juryModels = models.filter((m) => m.qe || m.jury);
-  const enabledCount = juryModels.filter((m) => m.enabled && m.jury).length;
+  const enabledCount = juryModels.filter((m) => (m.enabledJury ?? true) && m.jury).length;
 
   return (
     <div className="space-y-4">
@@ -64,11 +65,13 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
       </div>
 
       <div className="space-y-2">
-        {juryModels.map((model) => (
+        {juryModels.map((model) => {
+          const judgeOn = model.enabledJury ?? true;
+          return (
           <div
             key={model.id}
             className={`rounded-xl border p-3 ${
-              model.enabled ? "border-teal-200 bg-teal-50/30" : "border-slate-200"
+              judgeOn ? "border-teal-200 bg-teal-50/30" : "border-slate-200"
             }`}
           >
             <div className="flex items-center justify-between gap-3">
@@ -82,15 +85,15 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={model.enabled}
-                  onClick={() => update(model.id, { enabled: !model.enabled })}
+                  aria-checked={judgeOn}
+                  onClick={() => update(model.id, { enabledJury: !judgeOn })}
                   className={`relative h-5 w-9 rounded-full transition-colors ${
-                    model.enabled ? "bg-teal-500" : "bg-slate-200"
+                    judgeOn ? "bg-teal-500" : "bg-slate-200"
                   }`}
                 >
                   <span
                     className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                      model.enabled ? "left-4" : "left-0.5"
+                      judgeOn ? "left-4" : "left-0.5"
                     }`}
                   />
                 </button>
@@ -105,7 +108,8 @@ export function ApiKeysTab({ models, onChange }: ApiKeysTabProps) {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="rounded-xl border border-dashed border-slate-300 p-3">

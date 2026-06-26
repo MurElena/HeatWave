@@ -11,6 +11,7 @@ interface EvaluationProgressPanelProps {
 
 const PHASE_ORDER = [
   "dataset-preparation",
+  "translation",
   "bleu",
   "wer",
   "chrf",
@@ -22,6 +23,7 @@ const PHASE_ORDER = [
 
 const PHASE_LABELS: Record<string, string> = {
   "dataset-preparation": "Dataset preparation",
+  translation: "Translation",
   bleu: "BLEU",
   wer: "WER",
   chrf: "ChrF++",
@@ -36,10 +38,14 @@ export function EvaluationProgressPanel({
   activeMetrics,
   completedPhases,
 }: EvaluationProgressPanelProps) {
+  const alwaysVisible = new Set([
+    "dataset-preparation",
+    "translation",
+    "ranking",
+    "complete",
+  ]);
   const visiblePhases = PHASE_ORDER.filter((phase) => {
-    if (phase === "dataset-preparation" || phase === "ranking" || phase === "complete") {
-      return true;
-    }
+    if (alwaysVisible.has(phase)) return true;
     return activeMetrics.includes(phase as EvaluationMetricId);
   });
 

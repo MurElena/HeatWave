@@ -7,7 +7,12 @@ import {
   type QePrompt,
 } from "@/lib/settings";
 
-const QE_BATCH = 15;
+const QE_BATCH = 25;
+const THROTTLE_MS = 350;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function getActivePrompt(): QePrompt {
   const prompts = loadPrompts();
@@ -67,6 +72,7 @@ export async function scoreQeBatch(
   const usage: UsageTotals = { inputTokens: 0, outputTokens: 0 };
 
   for (let i = 0; i < items.length; i += QE_BATCH) {
+    if (i > 0) await sleep(THROTTLE_MS);
     const chunk = items.slice(i, i + QE_BATCH);
     const res = await postJson<{ scores: number[]; usage?: UsageTotals }>("/api/qe", {
       model,

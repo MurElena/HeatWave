@@ -44,47 +44,53 @@ export async function POST(req: Request) {
     .join("\n\n");
 
   try {
-    // Each model rates every segment. votesByModel[m][s] = rating.
-    const perModel = await Promise.all(
-      models.map(async (model) => {
-        let output: { ratings?: ("Good" | "Neutral" | "Bad")[] } | undefined;
-        let usage: { inputTokens?: number; outputTokens?: number } | undefined;
-        try {
-          ({ output, usage } = await generateText({
-            model,
-            system: JURY_PROMPT,
-            prompt:
-              `Rate each translation below as exactly one of Good, Neutral, or Bad, ` +
-              `following the criteria. Return one rating per segment, in order.\n\n${blocks}`,
-            output: Output.object({
-              schema: z.object({
-                ratings: z
-                  .array(RatingSchema)
-                  .describe("One rating (Good/Neutral/Bad) per segment, in order."),
-              }),
-            }),
-            providerOptions: {
-              gateway: { tags: ["feature:mt-eval", "phase:jury"] },
-            },
-          }));
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : "jury model failed.";
-          throw new Error(`${model}: ${detail}`);
-        }
-        let ratings = output?.ratings ?? [];
-        if (ratings.length < items.length) {
-          ratings = [...ratings, ...Array(items.length - ratings.length).fill("Neutral")];
-        }
-        return {
+    // Each model rates every segment. Run the models sequentially (rather than
+    // in parallel) to avoid bursting the free-tier rate limit.
+    const perModel: {
+      model: string;
+      ratings: ("Good" | "Neutral" | "Bad")[];
+      usage: { inputTokens: number; outputTokens: number };
+    }[] = [];
+
+    for (const model of models) {
+      let output: { ratings?: ("Good" | "Neutral" | "Bad")[] } | undefined;
+      let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+      try {
+        ({ output, usage } = await generateText({
           model,
-          ratings: ratings.slice(0, items.length),
-          usage: {
-            inputTokens: usage?.inputTokens ?? 0,
-            outputTokens: usage?.outputTokens ?? 0,
+          maxRetries: 4,
+          system: JURY_PROMPT,
+          prompt:
+            `Rate each translation below as exactly one of Good, Neutral, or Bad, ` +
+            `following the criteria. Return one rating per segment, in order.\n\n${blocks}`,
+          output: Output.object({
+            schema: z.object({
+              ratings: z
+                .array(RatingSchema)
+                .describe("One rating (Good/Neutral/Bad) per segment, in order."),
+            }),
+          }),
+          providerOptions: {
+            gateway: { tags: ["feature:mt-eval", "phase:jury"] },
           },
-        };
-      }),
-    );
+        }));
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : "jury model failed.";
+        throw new Error(`${model}: ${detail}`);
+      }
+      let ratings = output?.ratings ?? [];
+      if (ratings.length < items.length) {
+        ratings = [...ratings, ...Array(items.length - ratings.length).fill("Neutral")];
+      }
+      perModel.push({
+        model,
+        ratings: ratings.slice(0, items.length),
+        usage: {
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+        },
+      });
+    }
 
     // Transpose to per-segment votes: votes[s] = [ratingModel0, ratingModel1, ...]
     const votes = items.map((_, s) => perModel.map((mv) => mv.ratings[s]));

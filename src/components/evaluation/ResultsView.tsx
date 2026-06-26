@@ -97,6 +97,23 @@ export function ResultsView({ run }: ResultsViewProps) {
         </div>
       </div>
 
+      {run.failures && run.failures.length > 0 && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">Some items were removed so the evaluation could finish:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {run.failures.map((f) => (
+              <li key={`${f.kind}-${f.id}`}>
+                <span className="font-medium">
+                  {f.kind === "provider" ? "Model" : "Metric"} {f.name}
+                </span>
+                {" — "}
+                {f.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {run.hasHumanResults && (
         <div className="mt-6 flex gap-1 border-b border-slate-200">
           <button

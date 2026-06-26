@@ -31,6 +31,7 @@ export async function POST(req: Request) {
   try {
     const { output, usage } = await generateText({
       model,
+      maxRetries: 4,
       system:
         `You are a professional machine translation engine. Translate each numbered ` +
         `source segment from ${sourceLanguage} to ${targetLanguage}. Preserve meaning, ` +

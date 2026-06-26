@@ -196,10 +196,21 @@ export interface EvaluationRun {
   winnerProviderId: string;
   winnerProviderName: string;
   createdAt: string;
+  /** Models/metrics dropped because they failed during the run. */
+  failures?: EvaluationFailure[];
   hasHumanResults?: boolean;
   humanResults?: ProviderResult[];
   humanWinnerProviderId?: string;
   humanWinnerProviderName?: string;
+}
+
+export interface EvaluationFailure {
+  kind: "provider" | "metric";
+  /** Provider id or metric id that was removed. */
+  id: string;
+  /** Human-readable name (provider name or metric label). */
+  name: string;
+  reason: string;
 }
 
 export interface HistoryEntry {
@@ -259,6 +270,7 @@ export interface Review {
 
 export type EvaluationProgressPhase =
   | "dataset-preparation"
+  | "translation"
   | EvaluationMetricId
   | "ranking"
   | "complete";
